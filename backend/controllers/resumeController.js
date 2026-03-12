@@ -1,12 +1,10 @@
-const { extractResumeText } = require('../services/resumeParserService');
-const { extractSkills } = require('../services/skillExtractionService');
+const { analyzeResume } = require('../services/resumeAnalysisService');
 
 const uploadResume = async (req, res) => {
     if (!req.file) return res.status(400).json({ message: "No file uploaded" });
     try {
-        const extractedText = await extractResumeText(req.file.path);
-        const skills = extractSkills(extractedText);
-        res.json({ message: "Resume processed", skills: skills, text: extractedText });
+        const result = await analyzeResume(req.file.path);
+        res.json({ message: "Resume processed", data: result });
     } catch (error) {
         res.status(500).json({ message: "Error processing resume" });
     }
