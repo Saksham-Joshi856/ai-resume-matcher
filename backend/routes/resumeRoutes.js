@@ -23,9 +23,10 @@ const upload = multer({
     },
 });
 
-const { uploadResume } = require("../controllers/resumeController");
+const { uploadResume, getAllResumes } = require("../controllers/resumeController");
 
 router.post("/upload", upload.single("resume"), uploadResume);
+router.get("/all", getAllResumes);
 
 module.exports = router;
 
