@@ -3,6 +3,7 @@
 const { extractJobSkills } = require('../services/jobSkillExtractionService');
 const { calculateMatchScore } = require('../services/jobMatchingService');
 const { generateSuggestions } = require('../services/suggestionService');
+const { normalizeSkills } = require('../services/skillNormalizationService');
 
 async function matchJob(req, res) {
     try {
@@ -13,14 +14,16 @@ async function matchJob(req, res) {
         }
 
         const jobSkills = extractJobSkills(jobDescription);
-        const result = calculateMatchScore(resumeSkills, jobSkills);
+        const normalizedResumeSkills = normalizeSkills(resumeSkills);
+        const normalizedJobSkills = normalizeSkills(jobSkills);
+        const result = calculateMatchScore(normalizedResumeSkills, normalizedJobSkills);
         const suggestionResult = generateSuggestions(result.missingSkills);
 
         res.json({
             message: "Job match analysis complete",
             result: {
                 ...result,
-                jobSkills,
+                normalizedJobSkills,
                 suggestions: suggestionResult.suggestions
             }
         });
