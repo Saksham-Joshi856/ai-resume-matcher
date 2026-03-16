@@ -1,6 +1,7 @@
 const { extractResumeText } = require('./resumeParserService');
 const { extractSkills } = require('./skillExtractionService');
 const { normalizeSkills } = require('./skillNormalizationService');
+const { categorizeSkills } = require('./skillCategorizationService');
 
 /**
  * Performs full analysis on a resume file.
@@ -15,11 +16,14 @@ async function analyzeResume(filePath) {
     const extractedText = await extractResumeText(filePath);
     const skills = extractSkills(extractedText);
     const normalizedSkills = normalizeSkills(skills);
+    const categorizedSkills = categorizeSkills(normalizedSkills);
 
     return {
         text: extractedText,
-        skills: normalizedSkills
+        skills: normalizedSkills,
+        categorizedSkills
     };
+
 
 }
 
