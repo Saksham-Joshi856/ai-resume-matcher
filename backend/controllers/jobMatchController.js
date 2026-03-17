@@ -32,5 +32,38 @@ async function matchJob(req, res) {
     }
 }
 
-module.exports = { matchJob };
+const Resume = require('../models/Resume');
+
+const rankResumes = async (req, res) => {
+    try {
+        const { jobDescription } = req.body;
+        if (!jobDescription) {
+            return res.status(400).json({ error: 'jobDescription is required' });
+        }
+
+        const jobSkills = extractJobSkills(jobDescription);
+        const normalizedJobSkills = normalizeSkills(jobSkills);
+        const resumes = await Resume.find({}, 'name skills');
+        const results = [];
+
+        for (const resume of resumes) {
+            const result = calculateMatchScore(resume.skills, normalizedJobSkills);
+            results.push({
+                name: resume.name,
+                matchScore: result.matchScore
+            });
+        }
+
+        results.sort((a, b) => b.matchScore - a.matchScore);
+
+        res.json({
+            message: "Candidates ranked successfully",
+            data: results
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+module.exports = { matchJob, rankResumes };
 

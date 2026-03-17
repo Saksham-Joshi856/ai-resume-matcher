@@ -23,10 +23,12 @@ const upload = multer({
     },
 });
 
-const { uploadResume, getAllResumes } = require("../controllers/resumeController");
+const { uploadResume, getAllResumes, uploadMultipleResumes } = require("../controllers/resumeController");
 
 router.post("/upload", upload.single("resume"), uploadResume);
+router.post("/upload-multiple", upload.array("resumes", 10), uploadMultipleResumes);
 router.get("/all", getAllResumes);
 
 module.exports = router;
+
 
