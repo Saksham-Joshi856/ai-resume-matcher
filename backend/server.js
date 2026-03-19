@@ -12,6 +12,7 @@ app.use(cors())
 app.use(express.json())
 
 app.use("/api/resume", resumeRoutes)
+
 app.use("/api/job", jobMatchRoutes)
 
 app.get("/", (req, res) => {

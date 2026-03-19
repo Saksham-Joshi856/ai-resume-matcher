@@ -12,6 +12,10 @@ const resumeSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    matchScore: {
+        type: Number,
+        default: 0
+    },
     uploadedAt: {
         type: Date,
         default: Date.now

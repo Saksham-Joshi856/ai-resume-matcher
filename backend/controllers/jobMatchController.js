@@ -42,16 +42,23 @@ const rankResumes = async (req, res) => {
             return res.status(400).json({ error: 'jobDescription is required' });
         }
 
-        const jobSkills = extractJobSkills(jobDescription);
-        const normalizedJobSkills = normalizeSkills(jobSkills);
+        const jobSkills = jobDescription.toLowerCase().split(" ");
         const resumes = await Resume.find({}, 'name skills');
         const results = [];
 
         for (const resume of resumes) {
-            const result = calculateMatchScore(resume.skills, normalizedJobSkills);
+            const lowerResumeSkills = resume.skills.map(s => s.toLowerCase());
+            const matchedSkills = jobSkills.filter(skill => lowerResumeSkills.includes(skill.trim())).map(s => s.trim());
+            const missingSkills = jobSkills.filter(skill => !lowerResumeSkills.includes(skill.trim())).map(s => s.trim());
+            const matchScore = Math.round((matchedSkills.length / (jobSkills.length || 1)) * 100);
+            const suggestions = missingSkills.map(skill => `Add ${skill} experience`);
+
             results.push({
                 name: resume.name,
-                matchScore: result.matchScore
+                matchScore,
+                matchedSkills,
+                missingSkills,
+                suggestions
             });
         }
 
@@ -67,14 +74,18 @@ const rankResumes = async (req, res) => {
 };
 
 const uploadAndRankResumes = async (req, res) => {
+    console.log("FILES RECEIVED:", req.files);
+    console.log("BODY RECEIVED:", req.body);
     if (!req.files || req.files.length === 0) {
-        return res.status(400).json({ error: "No resumes uploaded" });
+        console.error("No files received:", req.files);
+        return res.status(400).json({ message: "No files uploaded" });
     }
     if (!req.body.jobDescription) {
         return res.status(400).json({ error: "Job description is required" });
     }
     try {
         const jobDescription = req.body.jobDescription;
+
         const jobSkills = extractJobSkills(jobDescription);
         const normalizedJobSkills = normalizeSkills(jobSkills);
         const rankedResumes = [];
@@ -94,7 +105,8 @@ const uploadAndRankResumes = async (req, res) => {
             const newResume = new Resume({
                 name: file.originalname,
                 skills: result.skills,
-                resumeText: result.text
+                resumeText: result.text,
+                matchScore: matchResult.matchScore
             });
             await newResume.save();
             rankedResumes.push({
@@ -108,20 +120,14 @@ const uploadAndRankResumes = async (req, res) => {
 
         rankedResumes.sort((a, b) => b.matchScore - a.matchScore);
 
-        const totalResumes = rankedResumes.length;
-        const sumScore = rankedResumes.reduce((sum, r) => sum + r.matchScore, 0);
-        const averageScore = totalResumes > 0 ? Math.round(sumScore / totalResumes) : 0;
-        const topCandidate = rankedResumes.length > 0 ? rankedResumes[0] : null;
+        const topCandidate = rankedResumes[0];
 
         res.json({
             message: "Upload and ranking complete",
             topCandidate,
-            rankedResumes,
-            analysis: {
-                totalResumes,
-                averageScore
-            }
+            rankedResumes
         });
+
     } catch (error) {
         console.error('Upload and rank error:', error);
         res.status(500).json({ error: "Internal server error" });

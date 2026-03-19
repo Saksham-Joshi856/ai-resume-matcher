@@ -27,10 +27,12 @@ const getAllResumes = async (req, res) => {
 };
 
 const uploadMultipleResumes = async (req, res) => {
+    console.log("FILES:", req.files);
     if (!req.files || req.files.length === 0) {
         return res.status(400).json({ message: "No files uploaded" });
     }
     try {
+
         let totalUploaded = 0;
         for (const file of req.files) {
             const result = await analyzeResume(file.path);
@@ -54,29 +56,78 @@ const uploadMultipleResumes = async (req, res) => {
 
 const searchResumes = async (req, res) => {
     try {
-        let query = {};
-        const { skill, name, page, limit, sortBy, order } = req.query;
-        if (skill) {
-            query.skills = { $regex: skill, $options: "i" };
-        }
+        const { skill, name, jobDescription } = req.query;
+
+        const query = {};
         if (name) {
             query.name = { $regex: name, $options: "i" };
         }
-        const pageNum = parseInt(page) || 1;
-        const limitNum = parseInt(limit) || 5;
-        const sortByField = sortBy || "name";
-        const sortOrder = order === "desc" ? -1 : 1;
-        const skip = (pageNum - 1) * limitNum;
-        const results = await Resume.find(query)
-            .sort({ [sortByField]: sortOrder })
-            .skip(skip)
-            .limit(limitNum);
-        const total = await Resume.countDocuments(query);
+        if (req.query.shortlisted !== undefined) {
+            query.shortlisted = req.query.shortlisted === "true";
+        }
+
+        let resumes = await Resume.find(query)
+            .sort({ uploadedAt: -1 })
+            .limit(20)
+            .lean();
+
+        if (skill) {
+            resumes = resumes.filter((r) =>
+                Array.isArray(r.skills) &&
+                r.skills.some((s) =>
+                    String(s).toLowerCase().includes(String(skill).toLowerCase())
+                )
+            );
+        }
+
+        const uniqueMap = new Map();
+        resumes.forEach((r) => {
+            if (!uniqueMap.has(r.name)) {
+                uniqueMap.set(r.name, r);
+            }
+        });
+
+        let uniqueResumes = Array.from(uniqueMap.values());
+
+        if (jobDescription) {
+            const jdSkills = String(jobDescription)
+                .toLowerCase()
+                .split(/\s+/)
+                .map((s) => s.trim())
+                .filter(Boolean);
+
+            uniqueResumes = uniqueResumes.map((r) => {
+                let matchCount = 0;
+
+                jdSkills.forEach((jdSkill) => {
+                    if (
+                        Array.isArray(r.skills) &&
+                        r.skills.some((s) => String(s).toLowerCase().includes(jdSkill))
+                    ) {
+                        matchCount++;
+                    }
+                });
+
+                const score = jdSkills.length
+                    ? Math.round((matchCount / jdSkills.length) * 100)
+                    : 0;
+
+                return { ...r, matchScore: score };
+            });
+        }
+
+        uniqueResumes.forEach((r) => {
+            if (typeof r.matchScore !== "number") {
+                r.matchScore = 0;
+            }
+        });
+
+        uniqueResumes.sort((a, b) => b.matchScore - a.matchScore);
+
         res.json({
-            results,
-            total,
-            page: pageNum,
-            pages: Math.ceil(total / limitNum)
+            message: "Search results",
+            count: uniqueResumes.length,
+            results: uniqueResumes
         });
     } catch (error) {
         res.status(500).json({ message: "Search error" });

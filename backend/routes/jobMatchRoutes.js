@@ -8,15 +8,20 @@ const { matchJob, rankResumes, uploadAndRankResumes } = require('../controllers/
 
 const router = express.Router();
 
-// Ensure uploads directory exists
-if (!fs.existsSync("uploads")) {
-    fs.mkdirSync("uploads");
+const uploadPath = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadPath)) {
+    fs.mkdirSync(uploadPath, { recursive: true });
 }
 
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, "uploads/"),
-    filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname)),
+    destination: function (req, file, cb) {
+        cb(null, uploadPath);
+    },
+    filename: function (req, file, cb) {
+        cb(null, Date.now() + "-" + file.originalname);
+    },
 });
+
 
 const upload = multer({
     storage,
