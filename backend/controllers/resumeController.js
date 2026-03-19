@@ -1,6 +1,13 @@
 const { analyzeResume } = require('../services/resumeAnalysisService');
 const Resume = require('../models/Resume');
 
+const tokenizeKeywords = (value) =>
+    String(value || "")
+        .toLowerCase()
+        .split(/[\s,]+/)
+        .map((token) => token.trim().replace(/^[^\w#+.-]+|[^\w#+.-]+$/g, ""))
+        .filter(Boolean);
+
 const uploadResume = async (req, res) => {
     if (!req.file) return res.status(400).json({ message: "No file uploaded" });
     try {
@@ -72,12 +79,23 @@ const searchResumes = async (req, res) => {
             .lean();
 
         if (skill) {
-            resumes = resumes.filter((r) =>
-                Array.isArray(r.skills) &&
-                r.skills.some((s) =>
-                    String(s).toLowerCase().includes(String(skill).toLowerCase())
-                )
-            );
+            const keywords = tokenizeKeywords(skill);
+
+            resumes = resumes.filter((r) => {
+                if (!Array.isArray(r.skills)) return false;
+
+                const normalizedSkills = r.skills.map((s) => String(s).toLowerCase());
+
+                let matchCount = 0;
+
+                keywords.forEach((k) => {
+                    if (normalizedSkills.some((s) => s.includes(k))) {
+                        matchCount++;
+                    }
+                });
+
+                return matchCount > 0;
+            });
         }
 
         const uniqueMap = new Map();
@@ -90,20 +108,16 @@ const searchResumes = async (req, res) => {
         let uniqueResumes = Array.from(uniqueMap.values());
 
         if (jobDescription) {
-            const jdSkills = String(jobDescription)
-                .toLowerCase()
-                .split(/\s+/)
-                .map((s) => s.trim())
-                .filter(Boolean);
+            const jdSkills = tokenizeKeywords(jobDescription);
 
             uniqueResumes = uniqueResumes.map((r) => {
                 let matchCount = 0;
+                const normalizedSkills = Array.isArray(r.skills)
+                    ? r.skills.map((s) => String(s).toLowerCase())
+                    : [];
 
                 jdSkills.forEach((jdSkill) => {
-                    if (
-                        Array.isArray(r.skills) &&
-                        r.skills.some((s) => String(s).toLowerCase().includes(jdSkill))
-                    ) {
+                    if (normalizedSkills.some((s) => s.includes(jdSkill))) {
                         matchCount++;
                     }
                 });
@@ -112,7 +126,7 @@ const searchResumes = async (req, res) => {
                     ? Math.round((matchCount / jdSkills.length) * 100)
                     : 0;
 
-                return { ...r, matchScore: score };
+                return { ...(r._doc || r), matchScore: score };
             });
         }
 
@@ -144,10 +158,11 @@ const toggleShortlist = async (req, res) => {
         resume.shortlisted = !resume.shortlisted;
         await resume.save();
         res.json({
-            message: "Shortlist status updated",
+            message: "Shortlist updated",
             shortlisted: resume.shortlisted
         });
     } catch (error) {
+        console.error(error);
         res.status(500).json({ message: "Server error" });
     }
 };
@@ -155,7 +170,10 @@ const toggleShortlist = async (req, res) => {
 const getShortlistedResumes = async (req, res) => {
     try {
         const resumes = await Resume.find({ shortlisted: true });
-        res.json({ results: resumes });
+        res.json({
+            message: "Shortlisted resumes",
+            results: resumes
+        });
     } catch (error) {
         res.status(500).json({ message: "Server error" });
     }

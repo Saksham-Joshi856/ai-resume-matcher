@@ -6,6 +6,7 @@ const cors = require("cors")
 const app = express()
 const resumeRoutes = require("./routes/resumeRoutes")
 const jobMatchRoutes = require("./routes/jobMatchRoutes")
+const authRoutes = require("./routes/authRoutes")
 const mongoose = require("mongoose")
 
 app.use(cors())
@@ -14,6 +15,8 @@ app.use(express.json())
 app.use("/api/resume", resumeRoutes)
 
 app.use("/api/job", jobMatchRoutes)
+
+app.use("/api/auth", authRoutes)
 
 app.get("/", (req, res) => {
     res.json({ message: "AI Resume Matcher API running" })

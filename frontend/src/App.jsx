@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
@@ -14,11 +14,43 @@ function App() {
 
   const [searchSkill, setSearchSkill] = useState("");
   const [filteredResults, setFilteredResults] = useState([]);
+  const [filter, setFilter] = useState("all");
+  const [searchNotice, setSearchNotice] = useState("");
+  const [shortlistedResumes, setShortlistedResumes] = useState([]);
+  const [shortlistNotice, setShortlistNotice] = useState("");
 
   const selectedFileNames = useMemo(
     () => files.map((file) => file.name),
     [files]
   );
+
+  const displayResults = useMemo(() => {
+    return filteredResults.filter((r) => {
+      const score = Number(r.matchScore ?? 0);
+      if (filter === "top") return score >= 70;
+      if (filter === "medium") return score >= 30 && score < 70;
+      if (filter === "weak") return score < 30;
+      if (filter === "shortlisted") return r.shortlisted === true;
+      return true;
+    });
+  }, [filteredResults, filter]);
+
+  const fetchShortlistedResumes = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/resume/shortlisted`);
+      const results = Array.isArray(res.data?.results) ? res.data.results : [];
+      setShortlistedResumes(results);
+      setShortlistNotice(results.length ? "" : "No shortlisted resumes yet.");
+    } catch (err) {
+      console.error(err);
+      setShortlistedResumes([]);
+      setShortlistNotice("Failed to load shortlisted resumes.");
+    }
+  };
+
+  useEffect(() => {
+    fetchShortlistedResumes();
+  }, []);
 
   const handleFileChange = (event) => {
     const selected = Array.from(event.target.files || []);
@@ -75,21 +107,72 @@ function App() {
   };
 
   const handleSearch = async () => {
+    setSearchNotice("");
+
     if (!searchSkill.trim()) {
       setFilteredResults([]);
+      setSearchNotice("Enter one or more skills to search.");
       return;
     }
 
     try {
+      setError("");
       const params = new URLSearchParams({
-        skill: searchSkill,
+        skill: searchSkill.trim(),
         jobDescription: jobDescription || "",
       });
 
       const res = await axios.get(
         `${API_BASE_URL}/api/resume/search?${params.toString()}`
       );
-      setFilteredResults(Array.isArray(res.data?.results) ? res.data.results : []);
+      const results = Array.isArray(res.data?.results) ? res.data.results : [];
+      setFilteredResults(results);
+      setFilter("all");
+      if (results.length === 0) {
+        setSearchNotice("No resumes matched your search keywords.");
+      }
+    } catch (err) {
+      console.error(err);
+      setFilteredResults([]);
+      setSearchNotice("Search failed. Ensure backend is running and try again.");
+    }
+  };
+
+  const handleShortlist = async (id) => {
+    try {
+      const res = await axios.patch(
+        `${API_BASE_URL}/api/resume/shortlist/${id}`
+      );
+
+      const nextShortlisted = Boolean(res.data?.shortlisted);
+      let toggledResume = null;
+
+      setFilteredResults((prev) =>
+        prev.map((resume) =>
+          resume._id === id
+            ? ((toggledResume = { ...resume, shortlisted: nextShortlisted }), toggledResume)
+            : resume
+        )
+      );
+
+      setShortlistedResumes((prev) => {
+        if (nextShortlisted) {
+          const sourceResume = toggledResume || prev.find((r) => r._id === id);
+          if (!sourceResume) {
+            return prev;
+          }
+          const updatedResume = { ...sourceResume, shortlisted: true };
+          return [updatedResume, ...prev.filter((r) => r._id !== id)];
+        }
+
+        return prev.filter((r) => r._id !== id);
+      });
+
+      setShortlistNotice((prev) => (nextShortlisted ? "" : prev));
+
+      if (nextShortlisted && !toggledResume) {
+        fetchShortlistedResumes();
+      }
     } catch (err) {
       console.error(err);
     }
@@ -104,6 +187,11 @@ function App() {
     setSuccessMessage("");
     setSearchSkill("");
     setFilteredResults([]);
+    setFilter("all");
+    setSearchNotice("");
+    setShortlistedResumes([]);
+    setShortlistNotice("");
+    fetchShortlistedResumes();
   };
 
   return (
@@ -142,7 +230,7 @@ function App() {
               Job Description
             </label>
             <textarea
-              className="h-36 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-0 transition focus:border-slate-500"
+              className="h-36 w-full p-3 rounded-lg border border-gray-300 bg-white text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400"
               placeholder="Paste the full job description here..."
               value={jobDescription}
               onChange={(event) => setJobDescription(event.target.value)}
@@ -191,25 +279,102 @@ function App() {
           <h2 className="mb-3 text-lg font-semibold text-slate-900">Search Resumes By Skill</h2>
           <input
             type="text"
-            placeholder="Search by skill..."
+            placeholder="Search by skills (e.g. react node mongodb)"
             value={searchSkill}
             onChange={(e) => setSearchSkill(e.target.value)}
-            className="mb-2 w-full rounded border border-slate-300 p-2 text-sm text-slate-900"
+            className="w-full p-3 rounded-lg border border-gray-300 bg-white text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 mb-3"
           />
 
           <button
             onClick={handleSearch}
-            className="mb-1 w-full rounded bg-green-500 py-2 text-sm font-medium text-white hover:bg-green-600"
+            className="w-full bg-green-500 text-white py-2 rounded-lg hover:bg-green-600 transition"
           >
             Search
           </button>
+
+          {searchNotice && (
+            <p className="mt-2 text-sm text-slate-600">{searchNotice}</p>
+          )}
         </section>
+
+        <section className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4">
+          <h2 className="mb-2 text-lg font-semibold text-amber-900">Shortlisted Resumes</h2>
+          {shortlistedResumes.length === 0 ? (
+            <p className="text-sm text-amber-800">
+              {shortlistNotice || "No shortlisted resumes yet."}
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {shortlistedResumes.map((r, index) => (
+                <div
+                  key={r._id || `${r.name}-${index}`}
+                  className="rounded border border-amber-200 bg-white p-3 text-sm text-slate-800"
+                >
+                  <p className="font-medium">{r.name}</p>
+                  {Array.isArray(r.skills) && r.skills.length > 0 && (
+                    <p className="mt-1 text-xs text-slate-600">Skills: {r.skills.join(", ")}</p>
+                  )}
+                  <button
+                    onClick={() => handleShortlist(r._id)}
+                    className="mt-2 rounded bg-yellow-500 px-3 py-1 text-white"
+                  >
+                    Unshortlist
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {filteredResults.length > 0 && (
+          <div className="w-full max-w-3xl mx-auto mt-6 flex flex-wrap gap-2 justify-center">
+            <button
+              onClick={() => setFilter("all")}
+              className={`px-3 py-1 rounded ${filter === "all" ? "bg-gray-500 text-white" : "bg-gray-300"
+                }`}
+            >
+              All
+            </button>
+
+            <button
+              onClick={() => setFilter("top")}
+              className={`px-3 py-1 rounded ${filter === "top" ? "bg-green-700 text-white" : "bg-green-500 text-white"
+                }`}
+            >
+              Top (70+)
+            </button>
+
+            <button
+              onClick={() => setFilter("medium")}
+              className={`px-3 py-1 rounded ${filter === "medium" ? "bg-yellow-600 text-white" : "bg-yellow-500 text-white"
+                }`}
+            >
+              Medium
+            </button>
+
+            <button
+              onClick={() => setFilter("weak")}
+              className={`px-3 py-1 rounded ${filter === "weak" ? "bg-red-700 text-white" : "bg-red-500 text-white"
+                }`}
+            >
+              Weak
+            </button>
+
+            <button
+              onClick={() => setFilter("shortlisted")}
+              className={`px-3 py-1 rounded ${filter === "shortlisted" ? "bg-blue-700 text-white" : "bg-blue-500 text-white"
+                }`}
+            >
+              Shortlisted
+            </button>
+          </div>
+        )}
 
         {filteredResults.length > 0 && (
           <section className="mt-5 rounded-lg border border-green-200 bg-green-50 p-4">
             <h2 className="mb-2 text-lg font-semibold text-green-900">Search Results</h2>
             <div className="space-y-2">
-              {filteredResults.map((r, index) => {
+              {displayResults.map((r, index) => {
                 const score = Number(r.matchScore ?? 0);
                 const scoreClass =
                   score > 70
@@ -233,10 +398,21 @@ function App() {
                     {Array.isArray(r.skills) && r.skills.length > 0 && (
                       <p className="mt-1 text-xs text-slate-600">Skills: {r.skills.join(", ")}</p>
                     )}
+                    <button
+                      onClick={() => handleShortlist(r._id)}
+                      className="mt-2 rounded bg-yellow-500 px-3 py-1 text-white"
+                    >
+                      {r.shortlisted ? "Unshortlist" : "Shortlist"}
+                    </button>
                   </div>
                 );
               })}
             </div>
+            {displayResults.length === 0 && (
+              <p className="mt-2 text-sm text-slate-600">
+                No resumes in this filter category.
+              </p>
+            )}
           </section>
         )}
 

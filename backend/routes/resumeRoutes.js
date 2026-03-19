@@ -34,6 +34,7 @@ router.post("/upload", upload.single("resume"), uploadResume);
 router.post("/upload-multiple", upload.array("resumes", 10), uploadMultipleResumes);
 router.get("/all", getAllResumes);
 router.get("/search", searchResumes);
+router.patch("/shortlist/:id", toggleShortlist);
 router.post("/:id/shortlist", toggleShortlist);
 router.get("/shortlisted", getShortlistedResumes);
 
