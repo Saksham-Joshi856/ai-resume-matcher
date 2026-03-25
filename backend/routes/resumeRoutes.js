@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const authMiddleware = require("../middleware/authMiddleware");
 
 const uploadPath = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(uploadPath)) {
@@ -30,13 +31,13 @@ const upload = multer({
 
 const { uploadResume, getAllResumes, uploadMultipleResumes, searchResumes, toggleShortlist, getShortlistedResumes } = require("../controllers/resumeController");
 
-router.post("/upload", upload.single("resume"), uploadResume);
-router.post("/upload-multiple", upload.array("resumes", 10), uploadMultipleResumes);
-router.get("/all", getAllResumes);
-router.get("/search", searchResumes);
-router.patch("/shortlist/:id", toggleShortlist);
-router.post("/:id/shortlist", toggleShortlist);
-router.get("/shortlisted", getShortlistedResumes);
+router.post("/upload", authMiddleware, upload.single("resume"), uploadResume);
+router.post("/upload-multiple", authMiddleware, upload.array("resumes", 10), uploadMultipleResumes);
+router.get("/all", authMiddleware, getAllResumes);
+router.get("/search", authMiddleware, searchResumes);
+router.patch("/shortlist/:id", authMiddleware, toggleShortlist);
+router.post("/:id/shortlist", authMiddleware, toggleShortlist);
+router.get("/shortlisted", authMiddleware, getShortlistedResumes);
 
 module.exports = router;
 

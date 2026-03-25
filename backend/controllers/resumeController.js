@@ -15,7 +15,8 @@ const uploadResume = async (req, res) => {
         const newResume = new Resume({
             name: "Unknown Candidate",
             skills: result.skills,
-            resumeText: result.text
+            resumeText: result.text,
+            userId: req.userId
         });
         await newResume.save();
         res.json({ message: "Resume processed and saved successfully", skills: result.skills });
@@ -26,7 +27,7 @@ const uploadResume = async (req, res) => {
 
 const getAllResumes = async (req, res) => {
     try {
-        const resumes = await Resume.find();
+        const resumes = await Resume.find({ userId: req.userId });
         res.json({ message: "Resumes fetched successfully", data: resumes });
     } catch (error) {
         res.status(500).json({ message: "Error fetching resumes" });
@@ -46,7 +47,8 @@ const uploadMultipleResumes = async (req, res) => {
             const newResume = new Resume({
                 name: file.originalname,
                 skills: result.skills,
-                resumeText: result.text
+                resumeText: result.text,
+                userId: req.userId
             });
             await newResume.save();
             totalUploaded++;
@@ -65,7 +67,7 @@ const searchResumes = async (req, res) => {
     try {
         const { skill, name, jobDescription } = req.query;
 
-        const query = {};
+        const query = { userId: req.userId };
         if (name) {
             query.name = { $regex: name, $options: "i" };
         }
@@ -151,7 +153,10 @@ const searchResumes = async (req, res) => {
 const toggleShortlist = async (req, res) => {
     try {
         const { id } = req.params;
-        const resume = await Resume.findById(id);
+        const resume = await Resume.findOne({
+            _id: id,
+            userId: req.userId
+        });
         if (!resume) {
             return res.status(404).json({ message: "Resume not found" });
         }
@@ -169,7 +174,7 @@ const toggleShortlist = async (req, res) => {
 
 const getShortlistedResumes = async (req, res) => {
     try {
-        const resumes = await Resume.find({ shortlisted: true });
+        const resumes = await Resume.find({ shortlisted: true, userId: req.userId });
         res.json({
             message: "Shortlisted resumes",
             results: resumes

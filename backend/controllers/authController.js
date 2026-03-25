@@ -4,7 +4,12 @@ const jwt = require("jsonwebtoken");
 
 const signup = async (req, res) => {
     try {
-        const { name, email, password } = req.body;
+        const { email, password } = req.body;
+
+        // Validate required fields
+        if (!email || !password) {
+            return res.status(400).json({ message: "Email and password are required" });
+        }
 
         const existingUser = await User.findOne({ email });
         if (existingUser) {
@@ -13,14 +18,22 @@ const signup = async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        await User.create({
-            name,
+        const newUser = await User.create({
+            name: email.split("@")[0], // Use email username as name
             email,
             password: hashedPassword,
         });
 
+        // Generate token for immediate login
+        const token = jwt.sign(
+            { id: newUser._id },
+            "secretkey",
+            { expiresIn: "1d" }
+        );
+
         res.json({
             message: "User registered successfully",
+            token,
         });
     } catch (err) {
         console.error(err);

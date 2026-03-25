@@ -4,6 +4,7 @@ const express = require('express');
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const authMiddleware = require("../middleware/authMiddleware");
 const { matchJob, rankResumes, uploadAndRankResumes } = require('../controllers/jobMatchController');
 
 const router = express.Router();
@@ -32,9 +33,9 @@ const upload = multer({
     },
 });
 
-router.post('/match', matchJob);
-router.post('/rank', rankResumes);
-router.post("/upload-and-rank", upload.array("resumes", 10), uploadAndRankResumes);
+router.post('/match', authMiddleware, matchJob);
+router.post('/rank', authMiddleware, rankResumes);
+router.post("/upload-and-rank", authMiddleware, upload.array("resumes", 10), uploadAndRankResumes);
 
 module.exports = router;
 

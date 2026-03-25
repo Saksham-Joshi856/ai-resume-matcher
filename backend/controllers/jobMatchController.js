@@ -43,7 +43,7 @@ const rankResumes = async (req, res) => {
         }
 
         const jobSkills = jobDescription.toLowerCase().split(" ");
-        const resumes = await Resume.find({}, 'name skills');
+        const resumes = await Resume.find({ userId: req.userId }, 'name skills');
         const results = [];
 
         for (const resume of resumes) {
@@ -106,7 +106,8 @@ const uploadAndRankResumes = async (req, res) => {
                 name: file.originalname,
                 skills: result.skills,
                 resumeText: result.text,
-                matchScore: matchResult.matchScore
+                matchScore: matchResult.matchScore,
+                userId: req.userId
             });
             await newResume.save();
             rankedResumes.push({

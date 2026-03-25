@@ -23,6 +23,11 @@ const resumeSchema = new mongoose.Schema({
     shortlisted: {
         type: Boolean,
         default: false
+    },
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true
     }
 });
 
