@@ -5,6 +5,7 @@
 
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
 export default function Signup() {
     const [name, setName] = useState('');
@@ -14,7 +15,7 @@ export default function Signup() {
     const [error, setError] = useState('');
     const navigate = useNavigate();
 
-    const handleSignup = (e) => {
+    const handleSignup = async (e) => {
         e.preventDefault();
         setError('');
         setLoading(true);
@@ -37,12 +38,17 @@ export default function Signup() {
         // Then: localStorage.setItem('token', response.data.token);
 
         // For now, simulate API call with mock JWT token
-        setTimeout(() => {
-            // Mock JWT token (in production, this comes from your backend)
-            const mockToken = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.${Date.now()}.mock_signature_${email}`;
+        try {
+            // Send POST request to backend signup API using environment variable
+            const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
+            const response = await axios.post(`${apiBaseUrl}/auth/signup`, {
+                name,
+                email,
+                password
+            });
 
-            // Store JWT token in localStorage
-            localStorage.setItem('token', mockToken);
+            // Store JWT token from response
+            localStorage.setItem('token', response.data.token);
 
             // Optional: Store user info (without password)
             localStorage.setItem('user', JSON.stringify({ name, email }));
@@ -51,7 +57,20 @@ export default function Signup() {
 
             // Redirect to dashboard on successful signup
             navigate('/dashboard');
-        }, 1000);
+        } catch (err) {
+            setLoading(false);
+
+            // Handle different error scenarios
+            if (err.response && err.response.status === 400) {
+                setError(err.response.data.message || 'Signup failed');
+            } else if (err.response && err.response.data && err.response.data.message) {
+                setError(err.response.data.message);
+            } else if (err.message === 'Network Error') {
+                setError('Cannot connect to server. Please check your internet connection.');
+            } else {
+                setError('Signup failed. Please try again.');
+            }
+        }
     };
 
     return (

@@ -14,6 +14,7 @@ const uploadResume = async (req, res) => {
         const result = await analyzeResume(req.file.path);
         const newResume = new Resume({
             name: "Unknown Candidate",
+            fileName: req.file.filename,
             skills: result.skills,
             resumeText: result.text,
             userId: req.userId
@@ -46,6 +47,7 @@ const uploadMultipleResumes = async (req, res) => {
             const result = await analyzeResume(file.path);
             const newResume = new Resume({
                 name: file.originalname,
+                fileName: file.filename,
                 skills: result.skills,
                 resumeText: result.text,
                 userId: req.userId
@@ -83,20 +85,18 @@ const searchResumes = async (req, res) => {
         if (skill) {
             const keywords = tokenizeKeywords(skill);
 
+            // More lenient matching: match if ANY keyword is found
             resumes = resumes.filter((r) => {
                 if (!Array.isArray(r.skills)) return false;
 
                 const normalizedSkills = r.skills.map((s) => String(s).toLowerCase());
 
-                let matchCount = 0;
-
-                keywords.forEach((k) => {
-                    if (normalizedSkills.some((s) => s.includes(k))) {
-                        matchCount++;
-                    }
-                });
-
-                return matchCount > 0;
+                // Partial match: if resume contains any keyword (partial or full)
+                return keywords.some((keyword) =>
+                    normalizedSkills.some((skill) =>
+                        skill.includes(keyword) || keyword.includes(skill)
+                    )
+                );
             });
         }
 
@@ -139,6 +139,8 @@ const searchResumes = async (req, res) => {
         });
 
         uniqueResumes.sort((a, b) => b.matchScore - a.matchScore);
+
+        console.log('Search results:', uniqueResumes.length, 'resumes with IDs:', uniqueResumes.map(r => r._id).slice(0, 3));
 
         res.json({
             message: "Search results",
@@ -183,8 +185,73 @@ const getShortlistedResumes = async (req, res) => {
         res.status(500).json({ message: "Server error" });
     }
 };
+const downloadResume = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const fs = require('fs');
+        const path = require('path');
+        const mongoose = require('mongoose');
 
-module.exports = { uploadResume, getAllResumes, uploadMultipleResumes, searchResumes, toggleShortlist, getShortlistedResumes };
+        // Validate MongoDB ObjectId
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            console.error('Invalid ObjectId:', id);
+            return res.status(400).json({ message: "Invalid resume ID format" });
+        }
+
+        console.log('Downloading resume:', id, 'for user:', req.userId);
+
+        const resume = await Resume.findOne({
+            _id: id,
+            userId: req.userId
+        });
+
+        if (!resume) {
+            console.error('Resume not found:', id, 'userId:', req.userId);
+            return res.status(404).json({ message: "Resume not found" });
+        }
+
+        console.log('Resume found:', resume.fileName);
+
+        if (!resume.fileName) {
+            // If no fileName, send the extracted text as a fallback
+            console.log('No fileName, returning extracted text');
+            return res.json({
+                message: "Resume text data",
+                fileName: resume.name || "resume",
+                text: resume.resumeText,
+                format: "text"
+            });
+        }
+
+        // Try to serve the actual PDF file
+        const filePath = path.join(__dirname, '..', 'uploads', resume.fileName);
+
+        console.log('Checking file path:', filePath);
+
+        // Check if file exists
+        if (!fs.existsSync(filePath)) {
+            console.error('PDF file not found:', filePath);
+            return res.status(404).json({
+                message: "PDF file not found on server",
+                fallbackText: resume.resumeText,
+                fileName: resume.name
+            });
+        }
+
+        console.log('Serving file:', filePath);
+
+        // Send the file
+        res.download(filePath, resume.fileName || 'resume.pdf', (err) => {
+            if (err) {
+                console.error('Download error:', err);
+            }
+        });
+    } catch (error) {
+        console.error('Download error:', error);
+        res.status(500).json({ message: "Error downloading resume", error: error.message });
+    }
+};
+module.exports = { uploadResume, getAllResumes, uploadMultipleResumes, searchResumes, toggleShortlist, getShortlistedResumes, downloadResume };
 
 
 

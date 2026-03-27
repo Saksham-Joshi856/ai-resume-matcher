@@ -28,8 +28,9 @@ export default function Login() {
         }
 
         try {
-            // Send POST request to backend authentication API
-            const response = await axios.post('http://localhost:5000/api/auth/login', {
+            // Send POST request to backend authentication API using environment variable
+            const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
+            const response = await axios.post(`${apiBaseUrl}/auth/login`, {
                 email,
                 password
             });

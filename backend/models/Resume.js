@@ -5,6 +5,10 @@ const resumeSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    fileName: {
+        type: String,
+        required: false
+    },
     skills: [{
         type: String
     }],

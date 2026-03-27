@@ -25,9 +25,10 @@ const signup = async (req, res) => {
         });
 
         // Generate token for immediate login
+        const jwtSecret = process.env.JWT_SECRET || "secretkey";
         const token = jwt.sign(
             { id: newUser._id },
-            "secretkey",
+            jwtSecret,
             { expiresIn: "1d" }
         );
 
@@ -57,7 +58,7 @@ const login = async (req, res) => {
 
         const token = jwt.sign(
             { id: user._id },
-            "secretkey",
+            process.env.JWT_SECRET || "secretkey",
             { expiresIn: "1d" }
         );
 
