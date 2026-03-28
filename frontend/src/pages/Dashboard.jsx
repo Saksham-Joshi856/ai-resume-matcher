@@ -169,41 +169,28 @@ export default function Dashboard() {
         setShortlistIds(newShortlist);
     };
 
-    // Handle view resume - opens PDF in new window or downloads
+    // Handle view resume - opens PDF directly from uploads folder
     const handleViewResume = async (resumeId, fileName) => {
         console.log('View resume clicked:', { resumeId, fileName });
 
         try {
-            const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
-            const token = localStorage.getItem('token');
-
-            console.log('Calling endpoint:', `${apiBaseUrl}/resume/download/${resumeId}`);
-
-            // Call the download endpoint which will handle file serving
-            const response = await axios.get(`${apiBaseUrl}/resume/download/${resumeId}`, {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            });
-
-            console.log('Download response:', response.data);
-
-            if (response.data.format === 'text') {
-                // If PDF not available, show the extracted text
-                alert('PDF file not found. Here is the extracted resume text:\n\n' + response.data.text.substring(0, 500) + '...');
-            } else {
-                // Try to open the direct file URL
-                const fileUrl = `${apiBaseUrl}/uploads/${fileName}`;
-                window.open(fileUrl, '_blank');
+            if (!fileName) {
+                alert('Resume file name not available. Please contact support.');
+                return;
             }
+
+            // Extract base server URL from API base URL and access uploads directly
+            // VITE_API_BASE_URL is http://localhost:5000/api
+            // We need http://localhost:5000/uploads/...
+            const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
+            const serverUrl = apiBaseUrl.replace('/api', ''); // Remove /api to get base URL
+            const fileUrl = `${serverUrl}/uploads/${fileName}`;
+            console.log('Opening resume URL:', fileUrl);
+
+            window.open(fileUrl, '_blank');
         } catch (err) {
             console.error('Error viewing resume:', err);
-            console.error('Error response:', err.response?.data);
-            if (err.response?.status === 404) {
-                alert('Resume file not found or has been deleted.');
-            } else {
-                alert('Error opening resume. Please try again.');
-            }
+            alert('Error opening resume. Please try again.');
         }
     };
 
@@ -557,57 +544,67 @@ export default function Dashboard() {
                                     return (
                                         <div
                                             key={candidate._id}
-                                            className="bg-gradient-to-r from-gray-50 to-white border border-gray-200 rounded-2xl p-5 hover:border-purple-300 hover:shadow-lg transition duration-300 group"
+                                            className="bg-gradient-to-r from-gray-50 to-white border border-gray-200 rounded-2xl p-6 hover:border-purple-300 hover:shadow-lg transition duration-300 group"
                                         >
-                                            <div className="flex items-center justify-between">
+                                            {/* Header: Candidate Info and Match Score */}
+                                            <div className="flex items-start justify-between mb-4">
                                                 {/* Candidate Info */}
                                                 <div className="flex-1">
                                                     <div className="flex items-center gap-4">
-                                                        <div className="w-14 h-14 bg-gradient-to-br from-purple-400 to-indigo-600 rounded-full flex items-center justify-center text-white text-xl font-bold">
+                                                        <div className="w-14 h-14 bg-gradient-to-br from-purple-400 to-indigo-600 rounded-full flex items-center justify-center text-white text-xl font-bold flex-shrink-0">
                                                             {(candidate.name || 'C').charAt(0).toUpperCase()}
                                                         </div>
                                                         <div>
                                                             <h4 className="font-bold text-gray-900 text-lg group-hover:text-purple-600 transition">{candidate.name || 'Unknown Candidate'}</h4>
-                                                            <div className="flex items-center gap-6 mt-2 text-sm text-gray-600">
-                                                                <span className="flex items-center gap-2">
-                                                                    <span>📄</span> {candidate.fileName || 'Resume'}
-                                                                </span>
-                                                                {candidate.skills && candidate.skills.length > 0 && (
-                                                                    <span className="flex items-center gap-2">
-                                                                        <span>🎯</span> {candidate.skills.slice(0, 2).join(', ')}
-                                                                    </span>
-                                                                )}
-                                                            </div>
+                                                            <p className="text-sm text-gray-500 flex items-center gap-2">
+                                                                <span>📄</span> {candidate.fileName || 'Resume'}
+                                                            </p>
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                {/* Match Score and Actions */}
-                                                <div className="flex items-center gap-5 ml-4">
-                                                    {/* Match Score Badge */}
-                                                    <div className={`bg-gradient-to-br ${matchColor} rounded-full w-16 h-16 flex items-center justify-center text-white font-bold text-xl shadow-lg group-hover:shadow-xl transition`}>
-                                                        {matchPercentage}%
-                                                    </div>
-
-                                                    {/* Action Buttons */}
-                                                    <div className="flex flex-col gap-2">
-                                                        <button
-                                                            onClick={() => handleViewResume(candidate._id, candidate.fileName || '')}
-                                                            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition transform hover:scale-105 text-sm flex items-center gap-2"
-                                                        >
-                                                            <span>👁️</span> View
-                                                        </button>
-                                                        <button
-                                                            onClick={() => toggleShortlist(candidate._id)}
-                                                            className={`font-semibold py-2 px-4 rounded-lg transition transform hover:scale-105 text-sm flex items-center gap-2 ${isShortlisted
-                                                                ? 'bg-amber-100 hover:bg-amber-200 text-amber-700'
-                                                                : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                                                                }`}
-                                                        >
-                                                            <span>{isShortlisted ? '⭐' : '☆'}</span> {isShortlisted ? 'Shortlisted' : 'Shortlist'}
-                                                        </button>
-                                                    </div>
+                                                {/* Match Score Badge */}
+                                                <div className={`bg-gradient-to-br ${matchColor} rounded-full w-16 h-16 flex items-center justify-center text-white font-bold text-xl shadow-lg group-hover:shadow-xl transition flex-shrink-0`}>
+                                                    {matchPercentage}%
                                                 </div>
+                                            </div>
+
+                                            {/* Skills Section */}
+                                            <div className="mb-4">
+                                                <p className="text-sm font-semibold text-gray-700 mb-2">🎯 Skills:</p>
+                                                {candidate.skills && candidate.skills.length > 0 ? (
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {candidate.skills.map((skill, index) => (
+                                                            <span
+                                                                key={index}
+                                                                className="bg-blue-100 text-blue-700 px-3 py-1 rounded-md text-sm font-medium hover:bg-blue-200 transition"
+                                                            >
+                                                                {skill}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-sm text-gray-400 italic">No skills extracted</p>
+                                                )}
+                                            </div>
+
+                                            {/* Action Buttons */}
+                                            <div className="flex gap-3 justify-end">
+                                                <button
+                                                    onClick={() => handleViewResume(candidate._id, candidate.fileName || '')}
+                                                    className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition transform hover:scale-105 text-sm flex items-center gap-2"
+                                                >
+                                                    <span>👁️</span> View
+                                                </button>
+                                                <button
+                                                    onClick={() => toggleShortlist(candidate._id)}
+                                                    className={`font-semibold py-2 px-4 rounded-lg transition transform hover:scale-105 text-sm flex items-center gap-2 ${isShortlisted
+                                                        ? 'bg-amber-100 hover:bg-amber-200 text-amber-700'
+                                                        : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                                                        }`}
+                                                >
+                                                    <span>{isShortlisted ? '⭐' : '☆'}</span> {isShortlisted ? 'Shortlisted' : 'Shortlist'}
+                                                </button>
                                             </div>
                                         </div>
                                     );

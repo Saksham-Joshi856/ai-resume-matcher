@@ -11,7 +11,9 @@ const tokenizeKeywords = (value) =>
 const uploadResume = async (req, res) => {
     if (!req.file) return res.status(400).json({ message: "No file uploaded" });
     try {
+        console.log('[UPLOAD] Processing resume:', req.file.filename);
         const result = await analyzeResume(req.file.path);
+
         const newResume = new Resume({
             name: "Unknown Candidate",
             fileName: req.file.filename,
@@ -19,10 +21,21 @@ const uploadResume = async (req, res) => {
             resumeText: result.text,
             userId: req.userId
         });
+
         await newResume.save();
-        res.json({ message: "Resume processed and saved successfully", skills: result.skills });
+        console.log('[UPLOAD] Resume saved successfully:', newResume._id);
+
+        res.json({
+            message: "Resume processed and analyzed successfully",
+            skills: result.skills,
+            extractionMethod: "AI-powered"
+        });
     } catch (error) {
-        res.status(500).json({ message: "Error processing resume" });
+        console.error('[UPLOAD] Error processing resume:', error.message);
+        res.status(500).json({
+            message: "Error processing resume",
+            error: error.message
+        });
     }
 };
 
@@ -36,32 +49,64 @@ const getAllResumes = async (req, res) => {
 };
 
 const uploadMultipleResumes = async (req, res) => {
-    console.log("FILES:", req.files);
+    console.log('[UPLOAD_MULTIPLE] Processing files:', req.files?.length || 0);
+
     if (!req.files || req.files.length === 0) {
         return res.status(400).json({ message: "No files uploaded" });
     }
-    try {
 
+    try {
         let totalUploaded = 0;
+        let totalFailed = 0;
+        const uploadedResumes = [];
+
         for (const file of req.files) {
-            const result = await analyzeResume(file.path);
-            const newResume = new Resume({
-                name: file.originalname,
-                fileName: file.filename,
-                skills: result.skills,
-                resumeText: result.text,
-                userId: req.userId
-            });
-            await newResume.save();
-            totalUploaded++;
+            try {
+                console.log('[UPLOAD_MULTIPLE] Processing file:', file.filename);
+                const result = await analyzeResume(file.path);
+
+                const newResume = new Resume({
+                    name: file.originalname,
+                    fileName: file.filename,
+                    skills: result.skills,
+                    resumeText: result.text,
+                    userId: req.userId
+                });
+
+                await newResume.save();
+
+                uploadedResumes.push({
+                    fileName: file.filename,
+                    skills: result.skills
+                });
+
+                totalUploaded++;
+                console.log('[UPLOAD_MULTIPLE] File processed successfully:', file.filename);
+            } catch (fileError) {
+                totalFailed++;
+                console.error(`[UPLOAD_MULTIPLE] Failed to process ${file.filename}:`, fileError.message);
+            }
         }
-        res.json({
-            message: "Multiple resumes uploaded successfully",
-            totalUploaded
-        });
+
+        const response = {
+            message: "Resume upload completed",
+            totalUploaded,
+            totalFailed,
+            extractionMethod: "AI-powered with fallback"
+        };
+
+        if (totalUploaded > 0) {
+            response.uploadedResumes = uploadedResumes;
+        }
+
+        res.json(response);
+
     } catch (error) {
-        console.error('Multiple upload error:', error);
-        res.status(500).json({ message: "Error processing resumes" });
+        console.error('[UPLOAD_MULTIPLE] Error in batch upload:', error.message);
+        res.status(500).json({
+            message: "Error processing batch upload",
+            error: error.message
+        });
     }
 };
 
