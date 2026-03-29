@@ -1,7 +1,7 @@
 const { openai } = require('../utils/openaiClient');
 
 /**
- * Extracts technical skills from resume text using OpenAI API.
+ * Extracts technical skills from resume text using OpenRouter API.
  * Falls back to basic extraction if AI fails.
  * 
  * @param {string} resumeText - The raw resume text.
@@ -14,7 +14,7 @@ async function extractSkills(resumeText) {
     }
 
     try {
-        console.log('[SKILL_EXTRACTION] Calling OpenAI API to extract skills...');
+        console.log('[SKILL_EXTRACTION] Calling OpenRouter API to extract skills...');
 
         // Truncate resume text to avoid exceeding token limits
         const maxChars = 3000;
@@ -23,7 +23,7 @@ async function extractSkills(resumeText) {
             : resumeText;
 
         const response = await openai.chat.completions.create({
-            model: 'gpt-3.5-turbo',
+            model: 'meta-llama/llama-3-8b-instruct:free',
             messages: [
                 {
                     role: 'system',
@@ -39,7 +39,7 @@ async function extractSkills(resumeText) {
         });
 
         const content = response.choices[0].message.content.trim();
-        console.log('[SKILL_EXTRACTION] OpenAI Response:', content);
+        console.log('[SKILL_EXTRACTION] OpenRouter Response:', content);
 
         // Parse the JSON response
         let skills = [];
@@ -52,14 +52,14 @@ async function extractSkills(resumeText) {
                 skills = JSON.parse(content);
             }
         } catch (parseError) {
-            console.warn('[SKILL_EXTRACTION] Failed to parse OpenAI response as JSON:', parseError.message);
+            console.warn('[SKILL_EXTRACTION] Failed to parse OpenRouter response as JSON:', parseError.message);
             console.log('[SKILL_EXTRACTION] Raw response:', content);
             return []; // Return empty array if parsing fails
         }
 
         // Validate and clean skills array
         if (!Array.isArray(skills)) {
-            console.warn('[SKILL_EXTRACTION] OpenAI response is not an array:', skills);
+            console.warn('[SKILL_EXTRACTION] OpenRouter response is not an array:', skills);
             return [];
         }
 
@@ -75,7 +75,7 @@ async function extractSkills(resumeText) {
         return cleanedSkills;
 
     } catch (error) {
-        console.error('[SKILL_EXTRACTION] OpenAI API error:', error.message);
+        console.error('[SKILL_EXTRACTION] OpenRouter API error:', error.message);
         console.error('[SKILL_EXTRACTION] Error details:', error);
 
         // Return empty array and let the error propagate

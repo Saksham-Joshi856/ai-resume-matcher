@@ -28,12 +28,25 @@ const resumeSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    notes: {
+        type: String,
+        default: ""
+    },
     userId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
         required: true
+    },
+    // STEP 1: Add field to cache AI insights - prevents repeated OpenRouter API calls
+    aiInsights: {
+        type: String,
+        default: null
+    },
+    aiInsightsGeneratedAt: {
+        type: Date,
+        default: null
     }
-});
+}, { timestamps: true }); // Enable timestamps (createdAt, updatedAt)
 
 module.exports = mongoose.model('Resume', resumeSchema);
 

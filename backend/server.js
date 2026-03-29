@@ -3,9 +3,45 @@ require("dotenv").config()
 const express = require("express")
 const cors = require("cors")
 const path = require("path")
+const rateLimit = require("express-rate-limit")
+const { ipKeyGenerator } = require("express-rate-limit")
 
 const app = express()
 
+// Initialize rate limiters
+const generalLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 100, // Limit each IP to 100 requests per windowMs
+    message: 'Too many requests from this IP, please try again later.',
+    standardHeaders: true,
+    legacyHeaders: false,
+})
+
+const aiInsightsLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 15, // Limit each user to 15 resume insights requests per hour (to prevent OpenRouter rate limit)
+    message: 'Too many resume insights requests. Please try again later.',
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => {
+        // Use userId from auth middleware if available, otherwise use IPv6-safe IP helper
+        return req.userId || ipKeyGenerator(req)
+    }
+})
+
+const aiMatchLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 30, // Limit each user to 30 AI matching requests per hour
+    message: 'Too many AI matching requests. Please try again later.',
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => {
+        // Use userId from auth middleware if available, otherwise use IPv6-safe IP helper
+        return req.userId || ipKeyGenerator(req)
+    }
+})
+
+console.log('[SERVER] Rate limiters initialized')
 console.log('[SERVER] Loading routes...')
 
 let resumeRoutes, jobMatchRoutes, authRoutes;
@@ -36,8 +72,9 @@ const mongoose = require("mongoose")
 
 app.use(cors())
 app.use(express.json())
+app.use(generalLimiter) // Apply general rate limiter to all routes
 
-console.log('[SERVER] Middleware configured: CORS, JSON Parser')
+console.log('[SERVER] Middleware configured: CORS, JSON Parser, General Rate Limiter')
 
 // Serve uploaded files as static
 app.use("/uploads", express.static(path.join(__dirname, "uploads")))
@@ -52,8 +89,8 @@ if (resumeRoutes) {
 }
 
 if (jobMatchRoutes) {
-    app.use("/api/job", jobMatchRoutes)
-    console.log('[SERVER] ✅ Job routes MOUNTED at /api/job')
+    app.use("/api/ai", jobMatchRoutes)
+    console.log('[SERVER] ✅ Job routes MOUNTED at /api/ai')
 }
 
 if (authRoutes) {

@@ -12,10 +12,26 @@ const uploadResume = async (req, res) => {
     if (!req.file) return res.status(400).json({ message: "No file uploaded" });
     try {
         console.log('[UPLOAD] Processing resume:', req.file.filename);
+
+        // Check if this resume (by original filename) already exists for this user
+        const existingResume = await Resume.findOne({
+            userId: req.userId,
+            name: req.file.originalname
+        });
+
+        if (existingResume) {
+            console.log(`[UPLOAD] Duplicate detected: ${req.file.originalname} - skipping`);
+            return res.status(400).json({
+                message: "This resume has already been uploaded. Please upload a different file or modify the filename.",
+                isDuplicate: true,
+                existingFileName: existingResume.fileName
+            });
+        }
+
         const result = await analyzeResume(req.file.path);
 
         const newResume = new Resume({
-            name: "Unknown Candidate",
+            name: req.file.originalname,
             fileName: req.file.filename,
             skills: result.skills,
             resumeText: result.text,
@@ -41,10 +57,17 @@ const uploadResume = async (req, res) => {
 
 const getAllResumes = async (req, res) => {
     try {
+        console.log('[GET_ALL] Fetching resumes for user:', req.userId);
         const resumes = await Resume.find({ userId: req.userId });
+        console.log('[GET_ALL] Found', resumes.length, 'resumes');
         res.json({ message: "Resumes fetched successfully", data: resumes });
     } catch (error) {
-        res.status(500).json({ message: "Error fetching resumes" });
+        console.error('[GET_ALL] Error:', error.message);
+        console.error('[GET_ALL] Stack:', error.stack);
+        res.status(500).json({
+            message: "Error fetching resumes",
+            error: error.message
+        });
     }
 };
 
@@ -58,11 +81,27 @@ const uploadMultipleResumes = async (req, res) => {
     try {
         let totalUploaded = 0;
         let totalFailed = 0;
+        let totalDuplicates = 0;
         const uploadedResumes = [];
+        const duplicateFiles = [];
 
         for (const file of req.files) {
             try {
                 console.log('[UPLOAD_MULTIPLE] Processing file:', file.filename);
+
+                // Check if this resume (by original filename) already exists for this user
+                const existingResume = await Resume.findOne({
+                    userId: req.userId,
+                    name: file.originalname
+                });
+
+                if (existingResume) {
+                    console.log(`[UPLOAD_MULTIPLE] Duplicate detected: ${file.originalname} - skipping`);
+                    totalDuplicates++;
+                    duplicateFiles.push(file.originalname);
+                    continue;
+                }
+
                 const result = await analyzeResume(file.path);
 
                 const newResume = new Resume({
@@ -77,6 +116,7 @@ const uploadMultipleResumes = async (req, res) => {
 
                 uploadedResumes.push({
                     fileName: file.filename,
+                    originalName: file.originalname,
                     skills: result.skills
                 });
 
@@ -92,11 +132,17 @@ const uploadMultipleResumes = async (req, res) => {
             message: "Resume upload completed",
             totalUploaded,
             totalFailed,
+            totalDuplicates,
             extractionMethod: "AI-powered with fallback"
         };
 
         if (totalUploaded > 0) {
             response.uploadedResumes = uploadedResumes;
+        }
+
+        if (totalDuplicates > 0) {
+            response.duplicatesSkipped = duplicateFiles;
+            response.warning = `${totalDuplicates} duplicate file(s) were skipped`;
         }
 
         res.json(response);
@@ -173,7 +219,7 @@ const searchResumes = async (req, res) => {
                     ? Math.round((matchCount / jdSkills.length) * 100)
                     : 0;
 
-                return { ...(r._doc || r), matchScore: score };
+                return { ...r, matchScore: score };
             });
         }
 
@@ -193,13 +239,20 @@ const searchResumes = async (req, res) => {
             results: uniqueResumes
         });
     } catch (error) {
-        res.status(500).json({ message: "Search error" });
+        console.error('[SEARCH] Error:', error.message);
+        console.error('[SEARCH] Stack:', error.stack);
+        res.status(500).json({
+            message: "Search error",
+            error: error.message
+        });
     }
 };
 
 const toggleShortlist = async (req, res) => {
     try {
         const { id } = req.params;
+        console.log('[SHORTLIST_TOGGLE] Toggling shortlist for resume:', id, 'user:', req.userId);
+
         const resume = await Resume.findOne({
             _id: id,
             userId: req.userId
@@ -209,25 +262,36 @@ const toggleShortlist = async (req, res) => {
         }
         resume.shortlisted = !resume.shortlisted;
         await resume.save();
+        console.log('[SHORTLIST_TOGGLE] Shortlist updated to:', resume.shortlisted);
         res.json({
             message: "Shortlist updated",
             shortlisted: resume.shortlisted
         });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: "Server error" });
+        console.error('[SHORTLIST_TOGGLE] Error:', error.message);
+        console.error('[SHORTLIST_TOGGLE] Stack:', error.stack);
+        res.status(500).json({
+            message: "Server error",
+            error: error.message
+        });
     }
 };
 
 const getShortlistedResumes = async (req, res) => {
     try {
         const resumes = await Resume.find({ shortlisted: true, userId: req.userId });
+        console.log('[SHORTLISTED] Found', resumes.length, 'shortlisted resumes for user:', req.userId);
         res.json({
             message: "Shortlisted resumes",
             results: resumes
         });
     } catch (error) {
-        res.status(500).json({ message: "Server error" });
+        console.error('[SHORTLISTED] Error:', error.message);
+        console.error('[SHORTLISTED] Stack:', error.stack);
+        res.status(500).json({
+            message: "Server error",
+            error: error.message
+        });
     }
 };
 const downloadResume = async (req, res) => {
@@ -296,7 +360,93 @@ const downloadResume = async (req, res) => {
         res.status(500).json({ message: "Error downloading resume", error: error.message });
     }
 };
-module.exports = { uploadResume, getAllResumes, uploadMultipleResumes, searchResumes, toggleShortlist, getShortlistedResumes, downloadResume };
+
+const addNote = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { note } = req.body;
+
+        if (!note || typeof note !== 'string') {
+            return res.status(400).json({ message: "Note content is required" });
+        }
+
+        const resume = await Resume.findOne({
+            _id: id,
+            userId: req.userId
+        });
+
+        if (!resume) {
+            return res.status(404).json({ message: "Resume not found" });
+        }
+
+        resume.notes = note.trim();
+        await resume.save();
+
+        res.json({
+            message: "Note added successfully",
+            notes: resume.notes
+        });
+    } catch (error) {
+        console.error('[ADD_NOTE] Error:', error);
+        res.status(500).json({ message: "Server error" });
+    }
+};
+
+const getNote = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const resume = await Resume.findOne({
+            _id: id,
+            userId: req.userId
+        }).select('notes');
+
+        if (!resume) {
+            return res.status(404).json({ message: "Resume not found" });
+        }
+
+        res.json({
+            message: "Note retrieved successfully",
+            notes: resume.notes || ""
+        });
+    } catch (error) {
+        console.error('[GET_NOTE] Error:', error);
+        res.status(500).json({ message: "Server error" });
+    }
+};
+
+const compareResumes = async (req, res) => {
+    try {
+        const { resumeIds } = req.body;
+
+        // Validate input
+        if (!resumeIds || !Array.isArray(resumeIds) || resumeIds.length === 0) {
+            return res.status(400).json({ message: "Invalid or empty resumeIds array" });
+        }
+
+        // Fetch resumes where _id is in resumeIds and belongs to current user
+        const resumes = await Resume.find({
+            _id: { $in: resumeIds },
+            userId: req.userId
+        }).select('name skills matchScore experience projects fileName resumeText uploadedAt notes shortlisted');
+
+        if (resumes.length === 0) {
+            return res.status(404).json({ message: "No resumes found" });
+        }
+
+        // Return candidate details for comparison
+        res.json({
+            message: "Resumes fetched successfully for comparison",
+            count: resumes.length,
+            data: resumes
+        });
+    } catch (error) {
+        console.error('[COMPARE] Error:', error.message);
+        res.status(500).json({ message: "Error comparing resumes" });
+    }
+};
+
+module.exports = { uploadResume, getAllResumes, uploadMultipleResumes, searchResumes, toggleShortlist, getShortlistedResumes, downloadResume, addNote, getNote, compareResumes };
 
 
 

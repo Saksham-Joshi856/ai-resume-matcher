@@ -29,7 +29,7 @@ const upload = multer({
     },
 });
 
-const { uploadResume, getAllResumes, uploadMultipleResumes, searchResumes, toggleShortlist, getShortlistedResumes, downloadResume } = require("../controllers/resumeController");
+const { uploadResume, getAllResumes, uploadMultipleResumes, searchResumes, toggleShortlist, getShortlistedResumes, downloadResume, addNote, getNote, compareResumes } = require("../controllers/resumeController");
 
 // Test route to verify router is working
 router.get("/test", (req, res) => {
@@ -42,6 +42,9 @@ router.post("/upload-multiple", authMiddleware, upload.array("resumes", 10), upl
 router.get("/all", authMiddleware, getAllResumes);
 router.get("/search", authMiddleware, searchResumes);
 router.get("/shortlisted", authMiddleware, getShortlistedResumes);
+router.post("/add-note/:id", authMiddleware, addNote);
+router.get("/note/:id", authMiddleware, getNote);
+router.post("/compare", authMiddleware, compareResumes);
 
 // Generic parameter routes LAST (/:id routes must come after specific routes)
 // Temporarily WITHOUT auth for debugging
@@ -80,5 +83,3 @@ router.patch("/shortlist/:id", authMiddleware, toggleShortlist);
 router.post("/:id/shortlist", authMiddleware, toggleShortlist);
 
 module.exports = router;
-
-
